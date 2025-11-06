@@ -26,8 +26,8 @@ export default function About() {
 
   if (loading || !settings?.show_about) return null;
 
-  const aboutText =
-    language === "en" ? settings.about_text_en : settings.about_text_pt;
+  // Renderiza diretamente o texto em PT, pois a tradução automática não está implementada.
+  const aboutText = settings.about_text_pt;
 
   return (
     <section className="py-20 bg-white">

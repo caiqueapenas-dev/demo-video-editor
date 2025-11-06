@@ -36,42 +36,55 @@ export default function Clients() {
         </h2>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 md:gap-12">
-          {clients.map((client) => (
-            <div
-              key={client.id}
-              className="flex flex-col items-center text-center group"
-            >
-              <div className="relative mb-4">
-                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-gray-200 group-hover:ring-emerald-400 transition-all duration-300 transform group-hover:scale-110">
-                  {client.photo_url ? (
-                    <img
-                      src={client.photo_url}
-                      alt={client.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold">
-                      {client.name.charAt(0)}
+          {clients.map((client) => {
+            const Wrapper = client.channel_link
+              ? (props: { children: React.ReactNode }) => (
+                  <a
+                    href={client.channel_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    {...props}
+                  />
+                )
+              : (props: { children: React.ReactNode }) => <div {...props} />;
+
+            return (
+              <Wrapper
+                key={client.id}
+                className="flex flex-col items-center text-center group"
+              >
+                <div className="relative mb-4">
+                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden ring-4 ring-gray-200 group-hover:ring-emerald-400 transition-all duration-300 transform group-hover:scale-110">
+                    {client.photo_url ? (
+                      <img
+                        src={client.photo_url}
+                        alt={client.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold">
+                        {client.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  {client.is_verified && (
+                    <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-lg">
+                      <CheckCircle2 className="w-6 h-6 text-blue-500" />
                     </div>
                   )}
                 </div>
-                {client.is_verified && (
-                  <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-lg">
-                    <CheckCircle2 className="w-6 h-6 text-blue-500" />
-                  </div>
-                )}
-              </div>
 
-              <h3 className="font-bold text-gray-900 mb-1 text-lg">
-                {client.name}
-              </h3>
-              {client.subscribers && (
-                <p className="text-sm text-gray-600">
-                  {client.subscribers} {t("subscribers")}
-                </p>
-              )}
-            </div>
-          ))}
+                <h3 className="font-bold text-gray-900 mb-1 text-lg">
+                  {client.name}
+                </h3>
+                {client.subscribers && (
+                  <p className="text-sm text-gray-600">
+                    {client.subscribers} {t("subscribers")}
+                  </p>
+                )}
+              </Wrapper>
+            );
+          })}
         </div>
       </div>
     </section>

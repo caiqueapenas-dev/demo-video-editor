@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Settings, Video, Users, FileText, DollarSign, HelpCircle,
-  LogOut, Eye, EyeOff, Plus, Trash2, Save
+  LogOut, Plus, Trash2, Save
 } from 'lucide-react';
+import PhoneInput from '../components/PhoneInput';
+import ImageUploader from '../components/ImageUploader';
+import { getYoutubeThumbnail } from '../lib/youtubeUtils';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -16,11 +19,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
+  // Estado local para os campos complexos
+  const [whatsappDDI, setWhatsappDDI] = useState('55');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  
   const [settings, setSettings] = useState({
     discord_link: '',
     whatsapp_link: '',
     email: '',
-    about_text_en: '',
     about_text_pt: '',
     about_image_url: '',
     show_long_videos: true,
@@ -46,7 +52,23 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
     if (activeTab === 'settings') {
       const { data } = await supabase.from('portfolio_settings').select('*').maybeSingle();
-      if (data) setSettings(data);
+      if (data) {
+        setSettings(data);
+        // Parse o whatsapp_link para DDI e Número
+        if (data.whatsapp_link) {
+          try {
+            const url = new URL(data.whatsapp_link);
+            const fullNumber = url.pathname.substring(1);
+            // Isso é uma suposição simples. Ajuste se o formato do DDI variar.
+            const ddi = fullNumber.substring(0, 2);
+            const number = fullNumber.substring(2);
+            setWhatsappDDI(ddi);
+            setWhatsappNumber(number);
+          } catch (e) {
+            console.error("Erro ao parsear whatsapp_link:", e);
+          }
+        }
+      }
     } else if (activeTab === 'videos') {
       const { data } = await supabase.from('long_videos').select('*').order('order_index');
       if (data) setLongVideos(data);
@@ -74,12 +96,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const saveSettings = async () => {
     setLoading(true);
+    
+    // Constrói o whatsapp_link a partir do DDI e número
+    const fullNumber = (whatsappDDI + whatsappNumber).replace(/\D/g, "");
+    const whatsapp_link = fullNumber ? `https://wa.me/${fullNumber}` : '';
+
+    const settingsToSave = {
+      ...settings,
+      whatsapp_link: whatsapp_link,
+    };
+
     const { data: existing } = await supabase.from('portfolio_settings').select('id').maybeSingle();
 
     if (existing) {
-      await supabase.from('portfolio_settings').update(settings).eq('id', existing.id);
+      await supabase.from('portfolio_settings').update(settingsToSave).eq('id', existing.id);
     } else {
-      await supabase.from('portfolio_settings').insert([settings]);
+      await supabase.from('portfolio_settings').insert([settingsToSave]);
     }
 
     showMessage('Settings saved successfully!');
@@ -92,15 +124,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       order_index: 0,
       is_active: true,
       youtube_url: '',
-      title_en: '',
-      title_pt: '',
+      thumbnail_url: '', // Adicionado
     };
 
-    if (type === 'video') setLongVideos([...longVideos, newItem]);
-    else if (type === 'short') setShorts([...shorts, newItem]);
-    else if (type === 'client') setClients([...clients, { ...newItem, name: '', photo_url: '', subscribers: '', is_verified: false }]);
-    else if (type === 'pricing') setPricing([...pricing, { ...newItem, name_en: '', name_pt: '', description_en: '', description_pt: '', price: 0, features_en: [], features_pt: [], is_custom: false }]);
-    else if (type === 'faq') setFaqs([...faqs, { ...newItem, question_en: '', question_pt: '', answer_en: '', answer_pt: '' }]);
+    if (type === 'video') setLongVideos([...longVideos, { ...newItem }]);
+    else if (type === 'short') setShorts([...shorts, { ...newItem }]);
+    else if (type === 'client') setClients([...clients, { ...newItem, name: '', photo_url: '', subscribers: '', channel_link: '', is_verified: false }]);
+    else if (type === 'pricing') setPricing([...pricing, { ...newItem, name_pt: '', description_pt: '', price: 0, features_pt: [], is_custom: false }]);
+    else if (type === 'faq') setFaqs([...faqs, { ...newItem, question_pt: '', answer_pt: '' }]);
   };
 
   const deleteItem = async (type: string, id: string) => {
@@ -124,6 +155,25 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     await supabase.from(tables[type]).delete().eq('id', id);
     loadData();
     showMessage('Item deleted successfully!');
+  };
+
+  // Helper para atualizar URL e Thumbnail
+  const handleVideoUrlChange = (
+    value: string,
+    index: number,
+    type: "video" | "short"
+  ) => {
+    const updater = type === "video" ? setLongVideos : setShorts;
+    const items = type === "video" ? longVideos : shorts;
+    
+    const updated = [...items];
+    updated[index].youtube_url = value;
+    
+    // Auto-fetch thumbnail
+    const thumbnailUrl = getYoutubeThumbnail(value);
+    updated[index].thumbnail_url = thumbnailUrl;
+    
+    updater(updated);
   };
 
   const saveItems = async (type: string) => {
@@ -217,13 +267,13 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">WhatsApp Link</label>
-                    <input
-                      type="text"
-                      value={settings.whatsapp_link}
-                      onChange={(e) => setSettings({ ...settings, whatsapp_link: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg"
-                      placeholder="https://wa.me/..."
+                    <label className="block text-sm font-medium mb-2">WhatsApp</label>
+                    <PhoneInput
+                      value={{ ddi: whatsappDDI, number: whatsappNumber }}
+                      onChange={({ ddi, number }) => {
+                        setWhatsappDDI(ddi);
+                        setWhatsappNumber(number);
+                      }}
                     />
                   </div>
 
@@ -237,26 +287,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2">About Image URL</label>
-                    <input
-                      type="text"
-                      value={settings.about_image_url}
-                      onChange={(e) => setSettings({ ...settings, about_image_url: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">About Text (English)</label>
-                  <textarea
-                    value={settings.about_text_en}
-                    onChange={(e) => setSettings({ ...settings, about_text_en: e.target.value })}
-                    rows={5}
-                    className="w-full px-4 py-2 border rounded-lg"
-                  />
-                </div>
+                  <ImageUploader
+              label="Imagem de Perfil (Sobre Mim)"
+              value={settings.about_image_url}
+              onChange={(url) => setSettings({ ...settings, about_image_url: url })}
+            />
 
                 <div>
                   <label className="block text-sm font-medium mb-2">About Text (Portuguese)</label>
@@ -312,51 +347,43 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 <div className="space-y-4">
                   {longVideos.map((video, index) => (
                     <div key={video.id} className="border rounded-lg p-4">
-                      <div className="grid md:grid-cols-2 gap-4 mb-4">
-                        <input
-                          type="text"
-                          placeholder="YouTube URL"
-                          value={video.youtube_url}
-                          onChange={(e) => {
-                            const updated = [...longVideos];
-                            updated[index].youtube_url = e.target.value;
-                            setLongVideos(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Order"
-                          value={video.order_index}
-                          onChange={(e) => {
-                            const updated = [...longVideos];
-                            updated[index].order_index = parseInt(e.target.value);
-                            setLongVideos(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Title (English)"
-                          value={video.title_en}
-                          onChange={(e) => {
-                            const updated = [...longVideos];
-                            updated[index].title_en = e.target.value;
-                            setLongVideos(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Title (Portuguese)"
-                          value={video.title_pt}
-                          onChange={(e) => {
-                            const updated = [...longVideos];
-                            updated[index].title_pt = e.target.value;
-                            setLongVideos(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
+                      <div className="grid md:grid-cols-3 gap-4 mb-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium mb-2">YouTube URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={video.youtube_url}
+                            onChange={(e) => handleVideoUrlChange(e.target.value, index, "video")}
+                            className="w-full px-4 py-2 border rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Ordem</label>
+                          <select
+                            value={video.order_index}
+                            onChange={(e) => {
+                              const updated = [...longVideos];
+                              updated[index].order_index = parseInt(e.target.value);
+                              setLongVideos(updated);
+                            }}
+                            className="w-full px-4 py-2 border rounded-lg bg-white"
+                          >
+                            {Array.from({ length: longVideos.length + 5 }, (_, i) => i).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {video.thumbnail_url && (
+                          <div className="md:col-span-3">
+                            <label className="block text-sm font-medium mb-2">Preview</label>
+                            <img 
+                              src={video.thumbnail_url} 
+                              alt="Thumbnail preview" 
+                              className="w-48 rounded-lg border bg-gray-100"
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2">
@@ -410,51 +437,43 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 <div className="space-y-4">
                   {shorts.map((short, index) => (
                     <div key={short.id} className="border rounded-lg p-4">
-                      <div className="grid md:grid-cols-2 gap-4 mb-4">
-                        <input
-                          type="text"
-                          placeholder="YouTube URL"
-                          value={short.youtube_url}
-                          onChange={(e) => {
-                            const updated = [...shorts];
-                            updated[index].youtube_url = e.target.value;
-                            setShorts(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Order"
-                          value={short.order_index}
-                          onChange={(e) => {
-                            const updated = [...shorts];
-                            updated[index].order_index = parseInt(e.target.value);
-                            setShorts(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Title (English)"
-                          value={short.title_en}
-                          onChange={(e) => {
-                            const updated = [...shorts];
-                            updated[index].title_en = e.target.value;
-                            setShorts(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Title (Portuguese)"
-                          value={short.title_pt}
-                          onChange={(e) => {
-                            const updated = [...shorts];
-                            updated[index].title_pt = e.target.value;
-                            setShorts(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
+                      <div className="grid md:grid-cols-3 gap-4 mb-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium mb-2">YouTube URL</label>
+                          <input
+                            type="text"
+                            placeholder="https://www.youtube.com/shorts/..."
+                            value={short.youtube_url}
+                            onChange={(e) => handleVideoUrlChange(e.target.value, index, "short")}
+                            className="w-full px-4 py-2 border rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Ordem</label>
+                          <select
+                            value={short.order_index}
+                            onChange={(e) => {
+                              const updated = [...shorts];
+                              updated[index].order_index = parseInt(e.target.value);
+                              setShorts(updated);
+                            }}
+                            className="w-full px-4 py-2 border rounded-lg bg-white"
+                          >
+                            {Array.from({ length: shorts.length + 5 }, (_, i) => i).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {short.thumbnail_url && (
+                           <div className="md:col-span-3">
+                             <label className="block text-sm font-medium mb-2">Preview</label>
+                             <img 
+                               src={short.thumbnail_url} 
+                               alt="Thumbnail preview" 
+                               className="w-24 rounded-lg border bg-gray-100"
+                             />
+                           </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2">
@@ -508,10 +527,19 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 <div className="space-y-4">
                   {clients.map((client, index) => (
                     <div key={client.id} className="border rounded-lg p-4">
-                      <div className="grid md:grid-cols-2 gap-4 mb-4">
+                      <div className="space-y-4 mb-4">
+                        <ImageUploader
+                          label="Foto do Cliente"
+                          value={client.photo_url}
+                          onChange={(url) => {
+                            const updated = [...clients];
+                            updated[index].photo_url = url;
+                            setClients(updated);
+                          }}
+                        />
                         <input
                           type="text"
-                          placeholder="Name"
+                          placeholder="Nome"
                           value={client.name}
                           onChange={(e) => {
                             const updated = [...clients];
@@ -520,17 +548,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           }}
                           className="px-4 py-2 border rounded-lg"
                         />
-                        <input
-                          type="text"
-                          placeholder="Photo URL"
-                          value={client.photo_url}
-                          onChange={(e) => {
-                            const updated = [...clients];
-                            updated[index].photo_url = e.target.value;
-                            setClients(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
+                        
                         <input
                           type="text"
                           placeholder="Subscribers (e.g., 100K)"
@@ -543,16 +561,32 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           className="px-4 py-2 border rounded-lg"
                         />
                         <input
-                          type="number"
-                          placeholder="Order"
-                          value={client.order_index}
+                          type="text"
+                          placeholder="Link do Canal (Opcional)"
+                          value={client.channel_link}
                           onChange={(e) => {
                             const updated = [...clients];
-                            updated[index].order_index = parseInt(e.target.value);
+                            updated[index].channel_link = e.target.value;
                             setClients(updated);
                           }}
                           className="px-4 py-2 border rounded-lg"
                         />
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Ordem</label>
+                          <select
+                            value={client.order_index}
+                            onChange={(e) => {
+                              const updated = [...clients];
+                              updated[index].order_index = parseInt(e.target.value);
+                              setClients(updated);
+                            }}
+                            className="w-full px-4 py-2 border rounded-lg bg-white"
+                          >
+                            {Array.from({ length: clients.length + 5 }, (_, i) => i).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex gap-4">
@@ -622,20 +656,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   {pricing.map((pkg, index) => (
                     <div key={pkg.id} className="border rounded-lg p-4">
                       <div className="grid md:grid-cols-2 gap-4 mb-4">
+                        
                         <input
                           type="text"
-                          placeholder="Name (English)"
-                          value={pkg.name_en}
-                          onChange={(e) => {
-                            const updated = [...pricing];
-                            updated[index].name_en = e.target.value;
-                            setPricing(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Name (Portuguese)"
+                          placeholder="Nome (Português)"
                           value={pkg.name_pt}
                           onChange={(e) => {
                             const updated = [...pricing];
@@ -644,20 +668,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           }}
                           className="px-4 py-2 border rounded-lg"
                         />
+                        
                         <input
                           type="text"
-                          placeholder="Description (English)"
-                          value={pkg.description_en}
-                          onChange={(e) => {
-                            const updated = [...pricing];
-                            updated[index].description_en = e.target.value;
-                            setPricing(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Description (Portuguese)"
+                          placeholder="Descrição (Português)"
                           value={pkg.description_pt}
                           onChange={(e) => {
                             const updated = [...pricing];
@@ -677,33 +691,25 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                           }}
                           className="px-4 py-2 border rounded-lg"
                         />
-                        <input
-                          type="number"
-                          placeholder="Order"
-                          value={pkg.order_index}
-                          onChange={(e) => {
-                            const updated = [...pricing];
-                            updated[index].order_index = parseInt(e.target.value);
-                            setPricing(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Ordem</label>
+                          <select
+                            value={pkg.order_index}
+                            onChange={(e) => {
+                              const updated = [...pricing];
+                              updated[index].order_index = parseInt(e.target.value);
+                              setPricing(updated);
+                            }}
+                            className="w-full px-4 py-2 border rounded-lg bg-white"
+                          >
+                            {Array.from({ length: pricing.length + 5 }, (_, i) => i).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Features (English) - one per line</label>
-                        <textarea
-                          value={Array.isArray(pkg.features_en) ? pkg.features_en.join('\n') : ''}
-                          onChange={(e) => {
-                            const updated = [...pricing];
-                            updated[index].features_en = e.target.value.split('\n').filter(f => f.trim());
-                            setPricing(updated);
-                          }}
-                          rows={3}
-                          className="w-full px-4 py-2 border rounded-lg"
-                        />
-                      </div>
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Features (Portuguese) - one per line</label>
+                        <label className="block text-sm font-medium mb-2">Features (Português) - uma por linha</label>
                         <textarea
                           value={Array.isArray(pkg.features_pt) ? pkg.features_pt.join('\n') : ''}
                           onChange={(e) => {
@@ -783,21 +789,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                   {faqs.map((faq, index) => (
                     <div key={faq.id} className="border rounded-lg p-4">
                       <div className="grid md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Question (English)</label>
-                          <input
-                            type="text"
-                            value={faq.question_en}
-                            onChange={(e) => {
-                              const updated = [...faqs];
-                              updated[index].question_en = e.target.value;
-                              setFaqs(updated);
-                            }}
-                            className="w-full px-4 py-2 border rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Question (Portuguese)</label>
+                        
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium mb-2">Pergunta (Português)</label>
                           <input
                             type="text"
                             value={faq.question_pt}
@@ -822,30 +816,23 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                             className="w-full px-4 py-2 border rounded-lg"
                           />
                         </div>
+                        
                         <div>
-                          <label className="block text-sm font-medium mb-2">Answer (Portuguese)</label>
-                          <textarea
-                            value={faq.answer_pt}
+                          <label className="block text-sm font-medium mb-2">Ordem</label>
+                          <select
+                            value={faq.order_index}
                             onChange={(e) => {
                               const updated = [...faqs];
-                              updated[index].answer_pt = e.target.value;
+                              updated[index].order_index = parseInt(e.target.value);
                               setFaqs(updated);
                             }}
-                            rows={3}
-                            className="w-full px-4 py-2 border rounded-lg"
-                          />
+                            className="w-full px-4 py-2 border rounded-lg bg-white"
+                          >
+                            {Array.from({ length: faqs.length + 5 }, (_, i) => i).map(num => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
                         </div>
-                        <input
-                          type="number"
-                          placeholder="Order"
-                          value={faq.order_index}
-                          onChange={(e) => {
-                            const updated = [...faqs];
-                            updated[index].order_index = parseInt(e.target.value);
-                            setFaqs(updated);
-                          }}
-                          className="px-4 py-2 border rounded-lg"
-                        />
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2">

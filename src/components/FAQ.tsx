@@ -38,9 +38,9 @@ export default function FAQ() {
 
         <div className="space-y-4">
           {faqs.map((faq, index) => {
-            const question =
-              language === "en" ? faq.question_en : faq.question_pt;
-            const answer = language === "en" ? faq.answer_en : faq.answer_pt;
+            // Remove a lógica de tradução, usa apenas os campos _pt
+            const question = faq.question_pt;
+            const answer = faq.answer_pt;
             const isOpen = openIndex === index;
 
             return (

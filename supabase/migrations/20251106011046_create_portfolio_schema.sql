@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS portfolio_settings (
   discord_link text DEFAULT '',
   whatsapp_link text DEFAULT '',
   email text DEFAULT '',
-  about_text_en text DEFAULT '',
+  
   about_text_pt text DEFAULT '',
   about_image_url text DEFAULT '',
   show_long_videos boolean DEFAULT true,
@@ -109,8 +109,7 @@ CREATE TABLE IF NOT EXISTS portfolio_settings (
 CREATE TABLE IF NOT EXISTS long_videos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   youtube_url text NOT NULL,
-  title_en text DEFAULT '',
-  title_pt text DEFAULT '',
+  thumbnail_url text DEFAULT '',
   order_index integer DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
@@ -119,8 +118,7 @@ CREATE TABLE IF NOT EXISTS long_videos (
 CREATE TABLE IF NOT EXISTS shorts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   youtube_url text NOT NULL,
-  title_en text DEFAULT '',
-  title_pt text DEFAULT '',
+  thumbnail_url text DEFAULT '',
   order_index integer DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
@@ -131,6 +129,7 @@ CREATE TABLE IF NOT EXISTS clients (
   name text NOT NULL,
   photo_url text DEFAULT '',
   subscribers text DEFAULT '',
+  channel_link text DEFAULT '',
   is_verified boolean DEFAULT false,
   order_index integer DEFAULT 0,
   is_active boolean DEFAULT true,
@@ -139,13 +138,10 @@ CREATE TABLE IF NOT EXISTS clients (
 
 CREATE TABLE IF NOT EXISTS pricing_packages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name_en text NOT NULL,
   name_pt text NOT NULL,
-  description_en text DEFAULT '',
   description_pt text DEFAULT '',
   price decimal DEFAULT 0,
-  features_en jsonb DEFAULT '[]'::jsonb,
-  features_pt jsonb DEFAULT '[]'::jsonb,
+  features_pt text[] DEFAULT ARRAY[]::text[],
   order_index integer DEFAULT 0,
   is_active boolean DEFAULT true,
   is_custom boolean DEFAULT false,
@@ -154,9 +150,7 @@ CREATE TABLE IF NOT EXISTS pricing_packages (
 
 CREATE TABLE IF NOT EXISTS faq_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  question_en text NOT NULL,
   question_pt text NOT NULL,
-  answer_en text NOT NULL,
   answer_pt text NOT NULL,
   order_index integer DEFAULT 0,
   is_active boolean DEFAULT true,
@@ -164,6 +158,10 @@ CREATE TABLE IF NOT EXISTS faq_items (
 );
 
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public can read admin users for login"
+  ON admin_users FOR SELECT
+  USING (true);
 ALTER TABLE portfolio_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE long_videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shorts ENABLE ROW LEVEL SECURITY;
@@ -194,6 +192,37 @@ CREATE POLICY "Public can read active pricing packages"
 CREATE POLICY "Public can read active FAQ items"
   ON faq_items FOR SELECT
   USING (is_active = true);
+
+/*
+  ### WARNING: INSECURE WRITE POLICIES ###
+  The policies below allow ANY user with the anon key to modify the database.
+  This is required for the custom admin panel to function without Supabase Auth,
+  but it is NOT secure for production.
+*/
+
+CREATE POLICY "Public can write portfolio settings"
+  ON portfolio_settings FOR ALL
+  USING (true);
+
+CREATE POLICY "Public can write long videos"
+  ON long_videos FOR ALL
+  USING (true);
+
+CREATE POLICY "Public can write shorts"
+  ON shorts FOR ALL
+  USING (true);
+
+CREATE POLICY "Public can write clients"
+  ON clients FOR ALL
+  USING (true);
+
+CREATE POLICY "Public can write pricing packages"
+  ON pricing_packages FOR ALL
+  USING (true);
+
+CREATE POLICY "Public can write FAQ items"
+  ON faq_items FOR ALL
+  USING (true);
 
 INSERT INTO admin_users (username, password) 
 VALUES ('admin', 'admin')
