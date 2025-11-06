@@ -24,7 +24,7 @@ const ddiMap: Record<string, string> = {
 
 // Gerar lista de países para o dropdown
 const countryOptions = getNames()
-  .map((name) => {
+  .map((name: string) => {
     const code = getCode(name);
     if (code && ddiMap[code]) {
       return {
@@ -36,7 +36,10 @@ const countryOptions = getNames()
     return null;
   })
   .filter(Boolean)
-  .sort((a, b) => a!.name.localeCompare(b!.name));
+  .sort((a, b) => {
+    if (!a || !b) return 0; // Trata valores nulos
+    return a.name.localeCompare(b.name);
+  });
 
 export default function PhoneInput({ value, onChange }: PhoneInputProps) {
   const [ddi, setDdi] = useState(value.ddi || "55"); // Default to Brazil
@@ -59,11 +62,14 @@ export default function PhoneInput({ value, onChange }: PhoneInputProps) {
         onChange={(e) => setDdi(e.target.value)}
         className="px-4 py-2 border rounded-lg bg-white"
       >
-        {countryOptions.map((option) => (
-          <option key={option!.code} value={option!.value}>
-            {option!.name}
-          </option>
-        ))}
+        {countryOptions.map((option) => {
+          if (!option) return null; // Trata valores nulos
+          return (
+            <option key={option.code} value={option.value}>
+              {option.name}
+            </option>
+          );
+        })}
       </select>
       <div className="relative flex-1">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">

@@ -53,7 +53,7 @@ export default function ImageUploader({
     formData.append("api_key", CLOUDINARY_API_KEY);
 
     try {
-      const response = await axios.post(
+      const response = await axios.post<{ secure_url: string }>(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         formData
       );

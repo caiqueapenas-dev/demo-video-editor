@@ -44,11 +44,10 @@ export default function Pricing({ onCustomQuote }: PricingProps) {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {packages.map((pkg, index) => {
-            const name = language === "en" ? pkg.name_en : pkg.name_pt;
-            const description =
-              language === "en" ? pkg.description_en : pkg.description_pt;
-            const features =
-              language === "en" ? pkg.features_en : pkg.features_pt;
+            // Remove a lógica de tradução, usa apenas os campos _pt
+            const name = pkg.name_pt;
+            const description = pkg.description_pt;
+            const features = pkg.features_pt;
             const isPopular = index === 1;
 
             return (

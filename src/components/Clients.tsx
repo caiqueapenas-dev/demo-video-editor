@@ -38,7 +38,7 @@ export default function Clients() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 md:gap-12">
           {clients.map((client) => {
             const Wrapper = client.channel_link
-              ? (props: { children: React.ReactNode }) => (
+              ? (props: { children: React.ReactNode; className?: string }) => (
                   <a
                     href={client.channel_link}
                     target="_blank"
@@ -46,7 +46,9 @@ export default function Clients() {
                     {...props}
                   />
                 )
-              : (props: { children: React.ReactNode }) => <div {...props} />;
+              : (props: { children: React.ReactNode; className?: string }) => (
+                  <div {...props} />
+                );
 
             return (
               <Wrapper
